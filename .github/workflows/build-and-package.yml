@@ -33,18 +33,44 @@ jobs:
       - name: Create output directory
         run: mkdir -p dist
 
-      - name: Package using jpackage
+      - name: Package with jpackage (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          jpackage `
+            --input target `
+            --name $Env:APP_NAME `
+            --main-jar $Env:JAR_NAME `
+            --main-class $Env:MAIN_CLASS `
+            --type exe `
+            --dest dist `
+            --win-console `
+            --java-options "-Xmx512m"
+
+      - name: Package with jpackage (Linux)
+        if: runner.os == 'Linux'
         run: |
           jpackage \
             --input target \
-            --name ${{ env.APP_NAME }} \
-            --main-jar ${{ env.JAR_NAME }} \
-            --main-class ${{ env.MAIN_CLASS }} \
-            --type app-image \
+            --name $APP_NAME \
+            --main-jar $JAR_NAME \
+            --main-class $MAIN_CLASS \
+            --type deb \
             --dest dist \
             --java-options "-Xmx512m"
 
-      - name: Archive packaged binary
+      - name: Package with jpackage (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          jpackage \
+            --input target \
+            --name $APP_NAME \
+            --main-jar $JAR_NAME \
+            --main-class $MAIN_CLASS \
+            --type pkg \
+            --dest dist \
+            --java-options "-Xmx512m"
+
+      - name: Upload packaged binary
         uses: actions/upload-artifact@v4
         with:
           name: edp-cli-${{ matrix.os }}
