@@ -35,12 +35,13 @@ jobs:
 
       - name: Package with jpackage (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
           jpackage `
             --input target `
-            --name $Env:APP_NAME `
-            --main-jar $Env:JAR_NAME `
-            --main-class $Env:MAIN_CLASS `
+            --name $env:APP_NAME `
+            --main-jar $env:JAR_NAME `
+            --main-class $env:MAIN_CLASS `
             --type exe `
             --dest dist `
             --win-console `
@@ -48,25 +49,27 @@ jobs:
 
       - name: Package with jpackage (Linux)
         if: runner.os == 'Linux'
+        shell: bash
         run: |
           jpackage \
             --input target \
             --name $APP_NAME \
             --main-jar $JAR_NAME \
             --main-class $MAIN_CLASS \
-            --type deb \
+            --type app-image \
             --dest dist \
             --java-options "-Xmx512m"
 
       - name: Package with jpackage (macOS)
         if: runner.os == 'macOS'
+        shell: bash
         run: |
           jpackage \
             --input target \
             --name $APP_NAME \
             --main-jar $JAR_NAME \
             --main-class $MAIN_CLASS \
-            --type pkg \
+            --type app-image \
             --dest dist \
             --java-options "-Xmx512m"
 
