@@ -14,7 +14,7 @@ jobs:
 
     env:
       MAIN_CLASS: EdpCli
-      JAR_NAME: edp-cli-1.0.jar        # ✅ Corrected JAR name
+      JAR_NAME: edp-cli-1.0.jar         # ✅ Fixed: actual jar name from Maven
       APP_NAME: edp-cli
 
     steps:
@@ -29,6 +29,11 @@ jobs:
 
       - name: Build shaded JAR with Maven
         run: mvn clean package -DskipTests
+
+        # Optional: dynamically detect final jar version from Maven (if needed)
+        # - name: Set jar name dynamically
+        #   run: |
+        #     echo "JAR_NAME=$(ls target/edp-cli-*.jar | grep -v 'original' | xargs -n 1 basename)" >> $GITHUB_ENV
 
       - name: Create output directory
         run: mkdir -p dist
