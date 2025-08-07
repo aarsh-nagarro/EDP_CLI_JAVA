@@ -1,0 +1,51 @@
+name: Build and Package CLI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    env:
+      MAIN_CLASS: EdpCli
+      JAR_NAME: edp-cli.jar
+      APP_NAME: edp-cli
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      - name: Build shaded JAR with Maven
+        run: mvn clean package -DskipTests
+
+      - name: Create output directory
+        run: mkdir -p dist
+
+      - name: Package using jpackage
+        run: |
+          jpackage \
+            --input target \
+            --name ${{ env.APP_NAME }} \
+            --main-jar ${{ env.JAR_NAME }} \
+            --main-class ${{ env.MAIN_CLASS }} \
+            --type app-image \
+            --dest dist \
+            --java-options "-Xmx512m"
+
+      - name: Archive packaged binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: edp-cli-${{ matrix.os }}
+          path: dist/
