@@ -14,7 +14,7 @@ jobs:
 
     env:
       MAIN_CLASS: EdpCli
-      JAR_NAME: edp-cli-1.0.jar         # ✅ Fixed: actual jar name from Maven
+      JAR_NAME: edp-cli-1.0.jar
       APP_NAME: edp-cli
 
     steps:
@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java 17
+        id: setup-java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -30,11 +31,6 @@ jobs:
       - name: Build shaded JAR with Maven
         run: mvn clean package -DskipTests
 
-        # Optional: dynamically detect final jar version from Maven (if needed)
-        # - name: Set jar name dynamically
-        #   run: |
-        #     echo "JAR_NAME=$(ls target/edp-cli-*.jar | grep -v 'original' | xargs -n 1 basename)" >> $GITHUB_ENV
-
       - name: Create output directory
         run: mkdir -p dist
 
@@ -42,6 +38,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $jdkPath = "${{ steps.setup-java.outputs.path }}"
           jpackage `
             --input target `
             --name $env:APP_NAME `
@@ -50,6 +47,7 @@ jobs:
             --type exe `
             --dest dist `
             --win-console `
+            --runtime-image "$jdkPath" `
             --java-options "-Xmx512m"
 
       - name: Package with jpackage (Linux)
@@ -58,12 +56,13 @@ jobs:
         run: |
           jpackage \
             --input target \
-            --name $APP_NAME \
-            --main-jar $JAR_NAME \
-            --main-class $MAIN_CLASS \
+            --name "$APP_NAME" \
+            --main-jar "$JAR_NAME" \
+            --main-class "$MAIN_CLASS" \
             --type app-image \
             --dest dist \
-            --java-options "-Xmx512m"
+            --java-options "-Xmx512m" \
+            --runtime-image "${JAVA_HOME}"
 
       - name: Package with jpackage (macOS)
         if: runner.os == 'macOS'
@@ -71,12 +70,13 @@ jobs:
         run: |
           jpackage \
             --input target \
-            --name $APP_NAME \
-            --main-jar $JAR_NAME \
-            --main-class $MAIN_CLASS \
+            --name "$APP_NAME" \
+            --main-jar "$JAR_NAME" \
+            --main-class "$MAIN_CLASS" \
             --type app-image \
             --dest dist \
-            --java-options "-Xmx512m"
+            --java-options "-Xmx512m" \
+            --runtime-image "${JAVA_HOME}"
 
       - name: Upload packaged binary
         uses: actions/upload-artifact@v4
