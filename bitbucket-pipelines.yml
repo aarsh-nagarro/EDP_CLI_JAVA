@@ -1,0 +1,77 @@
+image: maven:3.9.6-eclipse-temurin-21
+
+pipelines:
+  default:
+    - step:
+        name: Build Cross-Platform CLI with JRE
+        caches:
+          - maven
+        script:
+          # Checkout is implicit in Bitbucket
+          
+          # Build shaded JAR
+          - mvn clean package -DskipTests
+
+          # Test CLI JAR
+          - echo "Testing CLI before packaging..."
+          - java -jar target/edp-cli-1.0.jar say-bye --name Aarsh
+
+          # Prepare dist directory
+          - mkdir -p dist/edp-cli-linux/bin
+          - mkdir -p dist/edp-cli-windows/bin
+          - mkdir -p dist/edp-cli-macos/bin
+          - mkdir -p dist/edp-cli-linux/lib
+          - mkdir -p dist/edp-cli-windows/lib
+          - mkdir -p dist/edp-cli-macos/lib
+
+          - cp target/edp-cli-1.0.jar dist/edp-cli-linux/lib/
+          - cp target/edp-cli-1.0.jar dist/edp-cli-windows/lib/
+          - cp target/edp-cli-1.0.jar dist/edp-cli-macos/lib/
+
+          # Download JREs
+          - curl -L -o linux-jre.tar.gz https://download.bell-sw.com/java/21.0.3+12/bellsoft-jre21.0.3+12-linux-amd64.tar.gz
+          - mkdir dist/edp-cli-linux/runtime
+          - tar -xzf linux-jre.tar.gz --strip-components=1 -C dist/edp-cli-linux/runtime
+
+          - curl -L -o windows-jre.zip https://download.bell-sw.com/java/21.0.3+12/bellsoft-jre21.0.3+12-windows-amd64.zip
+          - mkdir dist/edp-cli-windows/runtime
+          - unzip -q windows-jre.zip -d dist/edp-cli-windows/runtime
+          - mv dist/edp-cli-windows/runtime/*/* dist/edp-cli-windows/runtime/ || true
+
+          - curl -L -o macos-jre.tar.gz https://download.bell-sw.com/java/21.0.3+12/bellsoft-jre21.0.3+12-macos-amd64.tar.gz
+          - mkdir dist/edp-cli-macos/runtime
+          - tar -xzf macos-jre.tar.gz --strip-components=1 -C dist/edp-cli-macos/runtime
+
+          # Create launch scripts
+          - |
+            cat > dist/edp-cli-linux/bin/edp-cli <<'EOF'
+            #!/bin/bash
+            DIR="$(cd "$(dirname "$0")/.." && pwd)"
+            "$DIR/runtime/bin/java" -jar "$DIR/lib/edp-cli-1.0.jar" "$@"
+            EOF
+          - chmod +x dist/edp-cli-linux/bin/edp-cli
+
+          - |
+            cat > dist/edp-cli-windows/bin/edp-cli.bat <<'EOF'
+            @echo off
+            set DIR=%~dp0..
+            "%DIR%\runtime\bin\java.exe" -jar "%DIR%\lib\edp-cli-1.0.jar" %*
+            EOF
+
+          - |
+            cat > dist/edp-cli-macos/bin/edp-cli <<'EOF'
+            #!/bin/bash
+            DIR="$(cd "$(dirname "$0")/.." && pwd)"
+            "$DIR/runtime/bin/java" -jar "$DIR/lib/edp-cli-1.0.jar" "$@"
+            EOF
+          - chmod +x dist/edp-cli-macos/bin/edp-cli
+
+          # Package Distributions
+          - cd dist
+          - zip -r edp-cli-linux.zip edp-cli-linux
+          - zip -r edp-cli-windows.zip edp-cli-windows
+          - zip -r edp-cli-macos.zip edp-cli-macos
+          - cd ..
+
+        artifacts:
+          - dist/*.zip
