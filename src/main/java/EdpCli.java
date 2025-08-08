@@ -1,3 +1,4 @@
+package com.example.cli;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
