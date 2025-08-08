@@ -1,99 +1,67 @@
-name: Build EDP CLI App Images
+name: Build CLI Native Packages
 
 on:
   push:
     branches: [ main ]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    env:
-      APP_NAME: edp-cli
-      JAR_NAME: edp-cli-1.0.jar
-      MAIN_CLASS: EdpCli
+    strategy:
+      matrix:
+        os: [linux, windows, macos]
+        include:
+          - os: linux
+            jre_url: https://github.com/adoptium/temurin21-binaries/releases/latest/download/OpenJDK21U-jre_x64_linux_hotspot.tar.gz
+            archive_ext: tar.gz
+          - os: windows
+            jre_url: https://github.com/adoptium/temurin21-binaries/releases/latest/download/OpenJDK21U-jre_x64_windows_hotspot.zip
+            archive_ext: zip
+          - os: macos
+            jre_url: https://github.com/adoptium/temurin21-binaries/releases/latest/download/OpenJDK21U-jre_x64_mac_hotspot.tar.gz
+            archive_ext: tar.gz
 
     steps:
-      - name: Checkout source
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: 21
+          java-version: '21'
+          distribution: 'temurin'
 
-      - name: Build shaded JAR
+      - name: Build JAR
         run: mvn clean package -DskipTests
 
-      - name: Prepare dist directory
-        run: mkdir -p dist
-
-      # Download and prepare Linux JRE
-      - name: Download Linux JRE
+      - name: Download JRE
         run: |
-          curl -L -o linux-jre.tar.gz https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.7%2B7/OpenJDK17U-jre_x64_linux_hotspot_17.0.7_7.tar.gz
-          mkdir -p jre/linux
-          tar -xzf linux-jre.tar.gz -C jre/linux --strip-components=1
+          curl -L -o jre.${{ matrix.archive_ext }} "${{ matrix.jre_url }}"
+          if [[ "${{ matrix.archive_ext }}" == "tar.gz" ]]; then
+            mkdir jre && tar -xzf jre.tar.gz -C jre --strip-components=1
+          else
+            unzip jre.zip -d jre && mv jre/* jre-runtime && rm -rf jre && mv jre-runtime jre
+          fi
 
-      - name: Create Linux app image
+      - name: Package with jpackage
         run: |
+          mkdir output
           jpackage \
+            --name edp-cli \
             --type app-image \
             --input target \
-            --main-jar ${JAR_NAME} \
-            --main-class ${MAIN_CLASS} \
-            --name ${APP_NAME} \
-            --runtime-image jre/linux \
-            --dest dist/linux
+            --main-jar edp-cli-1.0.jar \
+            --main-class EdpCli \
+            --runtime-image jre \
+            --dest output
+          
+          cd output
+          zip -r ../edp-cli-${{ matrix.os }}.zip edp-cli
+          cd ..
 
-      # Download and prepare Windows JRE
-      - name: Download Windows JRE
-        run: |
-          curl -L -o windows-jre.zip https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.7%2B7/OpenJDK17U-jre_x64_windows_hotspot_17.0.7_7.zip
-          mkdir -p jre/windows
-          unzip -q windows-jre.zip -d jre/windows
-          mv jre/windows/*/* jre/windows/ || true
-
-      - name: Create Windows app image
-        run: |
-          jpackage \
-            --type app-image \
-            --input target \
-            --main-jar ${JAR_NAME} \
-            --main-class ${MAIN_CLASS} \
-            --name ${APP_NAME} \
-            --runtime-image jre/windows \
-            --dest dist/windows
-
-      # Download and prepare macOS JRE
-      - name: Download macOS JRE
-        run: |
-          curl -L -o mac-jre.tar.gz https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.7%2B7/OpenJDK17U-jre_x64_mac_hotspot_17.0.7_7.tar.gz
-          mkdir -p jre/macos
-          tar -xzf mac-jre.tar.gz -C jre/macos --strip-components=1
-
-      - name: Create macOS app image
-        run: |
-          jpackage \
-            --type app-image \
-            --input target \
-            --main-jar ${JAR_NAME} \
-            --main-class ${MAIN_CLASS} \
-            --name ${APP_NAME} \
-            --runtime-image jre/macos \
-            --dest dist/macos
-
-      - name: Zip and upload images
-        run: |
-          cd dist
-          zip -r ${APP_NAME}-linux.zip linux
-          zip -r ${APP_NAME}-windows.zip windows
-          zip -r ${APP_NAME}-macos.zip macos
-
-      - name: Upload artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: edp-cli-distribution
-          path: dist/*.zip
+          name: edp-cli-${{ matrix.os }}
+          path: edp-cli-${{ matrix.os }}.zip
