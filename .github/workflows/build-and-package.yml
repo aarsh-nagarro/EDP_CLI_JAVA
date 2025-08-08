@@ -1,93 +1,68 @@
-name: Build Cross-Platform CLI with JRE
+name: Build and Package EDP CLI
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build:
+  build-package:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: 21
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Build shaded JAR
         run: mvn clean package -DskipTests
 
-      - name: Prepare dist directory
+      - name: Test CLI JAR
         run: |
-          mkdir -p dist/edp-cli-linux/bin
-          mkdir -p dist/edp-cli-windows/bin
-          mkdir -p dist/edp-cli-macos/bin
-          mkdir -p dist/edp-cli-linux/lib
-          mkdir -p dist/edp-cli-windows/lib
-          mkdir -p dist/edp-cli-macos/lib
+          echo "Testing CLI..."
+          java -jar target/edp-cli-1.0.jar say-bye --name Aarsh
 
-          cp target/edp-cli-1.0.jar dist/edp-cli-linux/lib/
-          cp target/edp-cli-1.0.jar dist/edp-cli-windows/lib/
-          cp target/edp-cli-1.0.jar dist/edp-cli-macos/lib/
-
-      - name: Download JREs
+      # Linux bundle
+      - name: Create Linux bundle
         run: |
-          # Linux JRE
-          curl -L -o linux-jre.tar.gz https://download.bell-sw.com/java/21.0.3+12/bellsoft-jre21.0.3+12-linux-amd64.tar.gz
-          mkdir dist/edp-cli-linux/runtime
-          tar -xzf linux-jre.tar.gz --strip-components=1 -C dist/edp-cli-linux/runtime
+          mkdir -p dist/linux/lib dist/linux/bin dist/linux/runtime
+          cp target/edp-cli-1.0.jar dist/linux/lib/
+          wget -q https://download.bell-sw.com/java/17.0.12+7/bellsoft-jre17.0.12+7-linux-amd64-full.tar.gz
+          tar -xzf bellsoft-jre17.0.12+7-linux-amd64-full.tar.gz -C dist/linux/runtime --strip-components=1
+          echo '#!/bin/bash' > dist/linux/bin/edp-cli
+          echo 'DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"' >> dist/linux/bin/edp-cli
+          echo '"$DIR/../runtime/bin/java" -jar "$DIR/../lib/edp-cli-1.0.jar" "$@"' >> dist/linux/bin/edp-cli
+          chmod +x dist/linux/bin/edp-cli
 
-          # Windows JRE
-          curl -L -o windows-jre.zip https://download.bell-sw.com/java/21.0.3+12/bellsoft-jre21.0.3+12-windows-amd64.zip
-          mkdir dist/edp-cli-windows/runtime
-          unzip -q windows-jre.zip -d dist/edp-cli-windows/runtime
-          mv dist/edp-cli-windows/runtime/*/* dist/edp-cli-windows/runtime/ || true
-
-          # macOS JRE
-          curl -L -o macos-jre.tar.gz https://download.bell-sw.com/java/21.0.3+12/bellsoft-jre21.0.3+12-macos-amd64.tar.gz
-          mkdir dist/edp-cli-macos/runtime
-          tar -xzf macos-jre.tar.gz --strip-components=1 -C dist/edp-cli-macos/runtime
-
-      - name: Create launch scripts
+      # Windows bundle
+      - name: Create Windows bundle
         run: |
-          # Linux launch script
-          cat > dist/edp-cli-linux/bin/edp-cli <<'EOF'
-          #!/bin/bash
-          DIR="$(cd "$(dirname "$0")/.." && pwd)"
-          "$DIR/runtime/bin/java" -jar "$DIR/lib/edp-cli-1.0.jar" "$@"
-          EOF
-          chmod +x dist/edp-cli-linux/bin/edp-cli
+          mkdir -p dist/windows/lib dist/windows/bin dist/windows/runtime
+          cp target/edp-cli-1.0.jar dist/windows/lib/
+          wget -q https://download.bell-sw.com/java/17.0.12+7/bellsoft-jre17.0.12+7-windows-amd64-full.zip
+          unzip -q bellsoft-jre17.0.12+7-windows-amd64-full.zip -d dist/windows/runtime
+          mv dist/windows/runtime/*/* dist/windows/runtime/
+          echo '@echo off' > dist/windows/bin/edp-cli.bat
+          echo 'set DIR=%~dp0' >> dist/windows/bin/edp-cli.bat
+          echo '"%DIR%..\runtime\bin\java.exe" -jar "%DIR%..\lib\edp-cli-1.0.jar" %*' >> dist/windows/bin/edp-cli.bat
 
-          # Windows launch script
-          cat > dist/edp-cli-windows/bin/edp-cli.bat <<'EOF'
-          @echo off
-          set DIR=%~dp0..
-          "%DIR%\runtime\bin\java.exe" -jar "%DIR%\lib\edp-cli-1.0.jar" %*
-          EOF
-
-          # macOS launch script
-          cat > dist/edp-cli-macos/bin/edp-cli <<'EOF'
-          #!/bin/bash
-          DIR="$(cd "$(dirname "$0")/.." && pwd)"
-          "$DIR/runtime/bin/java" -jar "$DIR/lib/edp-cli-1.0.jar" "$@"
-          EOF
-          chmod +x dist/edp-cli-macos/bin/edp-cli
-
-      - name: Package Distributions
+      - name: Zip bundles
         run: |
           cd dist
-          zip -r edp-cli-linux.zip edp-cli-linux
-          zip -r edp-cli-windows.zip edp-cli-windows
-          zip -r edp-cli-macos.zip edp-cli-macos
+          zip -r ../edp-cli-linux.zip linux
+          zip -r ../edp-cli-windows.zip windows
           cd ..
 
-      - name: Upload artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: edp-cli-bundles
-          path: dist/*.zip
+          path: |
+            edp-cli-linux.zip
+            edp-cli-windows.zip
