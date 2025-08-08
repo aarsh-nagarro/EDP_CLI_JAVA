@@ -1,4 +1,4 @@
-name: Build CLI Distributables
+name: Build EDP CLI for All Platforms
 
 on:
   push:
@@ -8,69 +8,87 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      APP_NAME: edp-cli
-      VERSION: 1.0
-      MAIN_CLASS: EdpCli
     steps:
-      - name: Checkout Code
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup JDK
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      - name: Build JAR
+      - name: Build shaded JAR
         run: mvn clean package -DskipTests
 
-      - name: Package for All OS
+      - name: Create dist directory
+        run: mkdir dist
+
+      # ---- Build for Linux ----
+      - name: Download Linux JRE
         run: |
-          rm -rf dist
-          mkdir dist
+          curl -L -o linux-jre.tar.gz https://github.com/adoptium/temurin21-binaries/releases/latest/download/OpenJDK21U-jre_x64_linux_hotspot.tar.gz
+          mkdir -p jre/linux
+          tar -xzf linux-jre.tar.gz -C jre/linux --strip-components=1
 
-          # Create custom JRE
-          jlink --output custom-jre --add-modules java.base,java.logging,java.sql
+      - name: Package Linux image
+        run: |
+          jpackage \
+            --type app-image \
+            --input target \
+            --main-jar edp-cli-1.0.jar \
+            --main-class EdpCli \
+            --name edp-cli \
+            --runtime-image jre/linux \
+            --dest dist/linux
 
-          # Linux
-          jpackage --type app-image \
-                   --name $APP_NAME \
-                   --input target \
-                   --main-jar edp-cli-1.0.jar \
-                   --main-class $MAIN_CLASS \
-                   --java-options "--enable-preview" \
-                   --dest dist/linux \
-                   --runtime-image custom-jre
+      # ---- Build for Windows ----
+      - name: Download Windows JRE
+        run: |
+          curl -L -o windows-jre.zip https://github.com/adoptium/temurin21-binaries/releases/latest/download/OpenJDK21U-jre_x64_windows_hotspot.zip
+          mkdir -p jre/windows
+          unzip -q windows-jre.zip -d jre/windows
+          mv jre/windows/*/* jre/windows/ || true
 
-          # Windows (folder output)
-          jpackage --type app-image \
-                   --name $APP_NAME \
-                   --input target \
-                   --main-jar edp-cli-1.0.jar \
-                   --main-class $MAIN_CLASS \
-                   --java-options "--enable-preview" \
-                   --dest dist/windows \
-                   --runtime-image custom-jre \
-                   --target-platform windows
+      - name: Package Windows image
+        run: |
+          jpackage \
+            --type app-image \
+            --input target \
+            --main-jar edp-cli-1.0.jar \
+            --main-class EdpCli \
+            --name edp-cli \
+            --runtime-image jre/windows \
+            --dest dist/windows
 
-          # macOS (folder output)
-          jpackage --type app-image \
-                   --name $APP_NAME \
-                   --input target \
-                   --main-jar edp-cli-1.0.jar \
-                   --main-class $MAIN_CLASS \
-                   --java-options "--enable-preview" \
-                   --dest dist/macos \
-                   --runtime-image custom-jre \
-                   --target-platform mac
+      # ---- Build for macOS ----
+      - name: Download macOS JRE
+        run: |
+          curl -L -o mac-jre.tar.gz https://github.com/adoptium/temurin21-binaries/releases/latest/download/OpenJDK21U-jre_x64_mac_hotspot.tar.gz
+          mkdir -p jre/macos
+          tar -xzf mac-jre.tar.gz -C jre/macos --strip-components=1
 
-          cd dist && zip -r ${APP_NAME}-linux.zip linux/${APP_NAME}
-          cd dist && zip -r ${APP_NAME}-windows.zip windows/${APP_NAME}
-          cd dist && zip -r ${APP_NAME}-macos.zip macos/${APP_NAME}
+      - name: Package macOS image
+        run: |
+          jpackage \
+            --type app-image \
+            --input target \
+            --main-jar edp-cli-1.0.jar \
+            --main-class EdpCli \
+            --name edp-cli \
+            --runtime-image jre/macos \
+            --dest dist/macos
 
-      - name: Upload Build Artifacts
+      # ---- Zip outputs ----
+      - name: Zip all builds
+        run: |
+          cd dist
+          zip -r edp-cli-linux.zip linux
+          zip -r edp-cli-windows.zip windows
+          zip -r edp-cli-macos.zip macos
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: cli-builds
+          name: edp-cli-binaries
           path: dist/*.zip
