@@ -1,13 +1,19 @@
-name: Build EDP CLI for All Platforms
+name: Build EDP CLI App Images
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    env:
+      APP_NAME: edp-cli
+      JAR_NAME: edp-cli-1.0.jar
+      MAIN_CLASS: EdpCli
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -21,74 +27,73 @@ jobs:
       - name: Build shaded JAR
         run: mvn clean package -DskipTests
 
-      - name: Create dist directory
-        run: mkdir dist
+      - name: Prepare dist directory
+        run: mkdir -p dist
 
-      # ---- Build for Linux ----
+      # Download and prepare Linux JRE
       - name: Download Linux JRE
         run: |
-          curl -L -o linux-jre.tar.gz https://github.com/adoptium/temurin21-binaries/releases/latest/download/OpenJDK21U-jre_x64_linux_hotspot.tar.gz
+          curl -L -o linux-jre.tar.gz https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.7%2B7/OpenJDK17U-jre_x64_linux_hotspot_17.0.7_7.tar.gz
           mkdir -p jre/linux
           tar -xzf linux-jre.tar.gz -C jre/linux --strip-components=1
 
-      - name: Package Linux image
+      - name: Create Linux app image
         run: |
           jpackage \
             --type app-image \
             --input target \
-            --main-jar edp-cli-1.0.jar \
-            --main-class EdpCli \
-            --name edp-cli \
+            --main-jar ${JAR_NAME} \
+            --main-class ${MAIN_CLASS} \
+            --name ${APP_NAME} \
             --runtime-image jre/linux \
             --dest dist/linux
 
-      # ---- Build for Windows ----
+      # Download and prepare Windows JRE
       - name: Download Windows JRE
         run: |
-          curl -L -o windows-jre.zip https://github.com/adoptium/temurin21-binaries/releases/latest/download/OpenJDK21U-jre_x64_windows_hotspot.zip
+          curl -L -o windows-jre.zip https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.7%2B7/OpenJDK17U-jre_x64_windows_hotspot_17.0.7_7.zip
           mkdir -p jre/windows
           unzip -q windows-jre.zip -d jre/windows
           mv jre/windows/*/* jre/windows/ || true
 
-      - name: Package Windows image
+      - name: Create Windows app image
         run: |
           jpackage \
             --type app-image \
             --input target \
-            --main-jar edp-cli-1.0.jar \
-            --main-class EdpCli \
-            --name edp-cli \
+            --main-jar ${JAR_NAME} \
+            --main-class ${MAIN_CLASS} \
+            --name ${APP_NAME} \
             --runtime-image jre/windows \
             --dest dist/windows
 
-      # ---- Build for macOS ----
+      # Download and prepare macOS JRE
       - name: Download macOS JRE
         run: |
-          curl -L -o mac-jre.tar.gz https://github.com/adoptium/temurin21-binaries/releases/latest/download/OpenJDK21U-jre_x64_mac_hotspot.tar.gz
+          curl -L -o mac-jre.tar.gz https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.7%2B7/OpenJDK17U-jre_x64_mac_hotspot_17.0.7_7.tar.gz
           mkdir -p jre/macos
           tar -xzf mac-jre.tar.gz -C jre/macos --strip-components=1
 
-      - name: Package macOS image
+      - name: Create macOS app image
         run: |
           jpackage \
             --type app-image \
             --input target \
-            --main-jar edp-cli-1.0.jar \
-            --main-class EdpCli \
-            --name edp-cli \
+            --main-jar ${JAR_NAME} \
+            --main-class ${MAIN_CLASS} \
+            --name ${APP_NAME} \
             --runtime-image jre/macos \
             --dest dist/macos
 
-      # ---- Zip outputs ----
-      - name: Zip all builds
+      - name: Zip and upload images
         run: |
           cd dist
-          zip -r edp-cli-linux.zip linux
-          zip -r edp-cli-windows.zip windows
-          zip -r edp-cli-macos.zip macos
+          zip -r ${APP_NAME}-linux.zip linux
+          zip -r ${APP_NAME}-windows.zip windows
+          zip -r ${APP_NAME}-macos.zip macos
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: edp-cli-binaries
+          name: edp-cli-distribution
           path: dist/*.zip
