@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -96,3 +98,18 @@ jobs:
         with:
           name: edp-cli-bundles
           path: dist/*.zip
+
+      - name: Commit and Push ZIPs to repo
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Move ZIPs to a permanent folder in repo (e.g., releases)
+          mkdir -p releases
+          cp dist/*.zip releases/
+
+          git add releases/*.zip
+          git commit -m "Add CLI bundles for commit $GITHUB_SHA" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
