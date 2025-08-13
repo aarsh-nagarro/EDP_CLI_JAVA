@@ -250,7 +250,24 @@ public class BuildDistributions {
             }
         }
 
+        // Create final bundle zip
+        Path bundleZip = distDir.resolve("edp-cli-bundle.zip");
+        try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(bundleZip))) {
+            Files.walk(distDir)
+                .filter(path -> !Files.isDirectory(path) && !path.equals(bundleZip))
+                .forEach(path -> {
+                    try {
+                        String relativePath = distDir.relativize(path).toString().replace("\\", "/");
+                        zos.putNextEntry(new ZipEntry(relativePath));
+                        Files.copy(path, zos);
+                        zos.closeEntry();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
+        }
         System.out.println("✅ All distributions built in dist/");
+        System.out.println("📦 Bundle created: " + bundleZip.toAbsolutePath());
     }
 
     private static boolean isDirectoryEmpty(Path dir) throws IOException {
