@@ -39,7 +39,7 @@ jobs:
           mkdir -p releases
           cp dist/* releases/
 
-          git add releases/*.zip
+          git add releases/*
           git commit -m "Add CLI bundles for commit $GITHUB_SHA" || echo "No changes to commit"
           git push
         env:
