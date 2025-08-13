@@ -1,0 +1,167 @@
+package tools;
+
+import java.io.*;
+import java.net.URL;
+import java.nio.file.*;
+import java.util.List;
+import java.util.zip.*;
+
+public class BuildDistributions {
+
+    private static final String VERSION = "21.0.3+12";
+    private static final String BASE_URL = "https://download.bell-sw.com/java/" + VERSION + "/";
+
+    private static final List<String[]> TARGETS = List.of(
+        new String[]{"windows", "bellsoft-jre" + VERSION + "-windows-amd64.zip"},
+        new String[]{"linux", "bellsoft-jre" + VERSION + "-linux-amd64.tar.gz"},
+        new String[]{"macos", "bellsoft-jre" + VERSION + "-macos-amd64.tar.gz"}
+    );
+
+    public static void main(String[] args) throws Exception {
+        Path distDir = Paths.get("dist");
+        Files.createDirectories(distDir);
+
+        for (String[] target : TARGETS) {
+            String osName = target[0];
+            String jreFile = target[1];
+            Path osDir = distDir.resolve("edp-cli-" + osName);
+            Files.createDirectories(osDir.resolve("bin"));
+            Files.createDirectories(osDir.resolve("lib"));
+            Files.createDirectories(osDir.resolve("runtime"));
+
+            // Copy CLI JAR
+            Files.copy(Paths.get("target/edp-cli-1.0.jar"),
+                       osDir.resolve("lib/edp-cli-1.0.jar"),
+                       StandardCopyOption.REPLACE_EXISTING);
+
+            // Download JRE
+            Path jreArchive = distDir.resolve(jreFile);
+            if (!Files.exists(jreArchive)) {
+                System.out.println("Downloading JRE for " + osName + "...");
+                try (InputStream in = new URL(BASE_URL + jreFile).openStream()) {
+                    Files.copy(in, jreArchive, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+
+            // Extract JRE
+            System.out.println("Extracting JRE for " + osName + "...");
+            if (jreFile.endsWith(".zip")) {
+                unzip(jreArchive, osDir.resolve("runtime"));
+            } else {
+                untarGz(jreArchive, osDir.resolve("runtime"));
+            }
+
+            // Create launcher script
+            if ("windows".equals(osName)) {
+                Path batFile = osDir.resolve("bin/edp-cli.bat");
+                Files.writeString(batFile,
+                    "@echo off\r\n" +
+                    "set DIR=%~dp0..\r\n" +
+                    "\"%DIR%\\runtime\\jre-21.0.3\\bin\\java.exe\" -jar \"%DIR%\\lib\\edp-cli-1.0.jar\" %*\r\n"
+                );
+            } else {
+                Path shFile = osDir.resolve("bin/edp-cli");
+                Files.writeString(shFile,
+                    "#!/bin/sh\n" +
+                    "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
+                    "$DIR/runtime/bin/jre-21.0.3/java -jar $DIR/lib/edp-cli-1.0.jar \"$@\"\n"
+                );
+                shFile.toFile().setExecutable(true);
+            }
+        }
+
+        System.out.println("✅ All distributions built in dist/");
+    }
+
+    private static void unzip(Path zipFile, Path targetDir) throws IOException {
+        try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipFile))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                Path newFile = targetDir.resolve(entry.getName());
+                if (entry.isDirectory()) {
+                    Files.createDirectories(newFile);
+                } else {
+                    Files.createDirectories(newFile.getParent());
+                    Files.copy(zis, newFile, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    private static void untarGz(Path tarGzFile, Path targetDir) throws IOException {
+        Files.createDirectories(targetDir);
+        try (InputStream fi = Files.newInputStream(tarGzFile);
+             GZIPInputStream gzi = new GZIPInputStream(fi);
+             TarInputStream tis = new TarInputStream(gzi)) {
+            TarEntry entry;
+            while ((entry = tis.getNextEntry()) != null) {
+                Path newFile = targetDir.resolve(entry.getName());
+                if (entry.isDirectory()) {
+                    Files.createDirectories(newFile);
+                } else {
+                    Files.createDirectories(newFile.getParent());
+                    Files.copy(tis, newFile, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    // --- Minimal Tar classes (no external libs) ---
+    private static class TarInputStream extends FilterInputStream {
+        private final byte[] buf = new byte[512];
+        private boolean eof = false;
+
+        protected TarInputStream(InputStream in) {
+            super(in);
+        }
+
+        TarEntry getNextEntry() throws IOException {
+            if (eof) return null;
+            int read = readFully(buf);
+            if (read < 512) return null;
+            boolean empty = true;
+            for (byte b : buf) {
+                if (b != 0) { empty = false; break; }
+            }
+            if (empty) { eof = true; return null; }
+            String name = parseName(buf, 0, 100);
+            long size = parseOctal(buf, 124, 12);
+            boolean dir = buf[156] == '5';
+            return new TarEntry(name, size, dir);
+        }
+
+        public int read(byte[] b, int off, int len) throws IOException {
+            return super.read(b, off, len);
+        }
+
+        private int readFully(byte[] b) throws IOException {
+            int total = 0, read;
+            while (total < b.length && (read = super.read(b, total, b.length - total)) != -1) {
+                total += read;
+            }
+            return total;
+        }
+
+        private String parseName(byte[] buf, int offset, int length) {
+            return new String(buf, offset, length).trim().replace("\0", "");
+        }
+
+        private long parseOctal(byte[] buf, int offset, int length) {
+            String s = new String(buf, offset, length).trim();
+            return s.isEmpty() ? 0 : Long.parseLong(s, 8);
+        }
+    }
+
+    private static class TarEntry {
+        final String name;
+        final long size;
+        final boolean directory;
+        TarEntry(String name, long size, boolean directory) {
+            this.name = name;
+            this.size = size;
+            this.directory = directory;
+        }
+        boolean isDirectory() { return directory; }
+        String getName() { return name; }
+    }
+}
