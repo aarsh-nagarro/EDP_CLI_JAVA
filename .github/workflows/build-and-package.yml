@@ -28,7 +28,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: edp-cli-bundles
-          path: dist/*.zip
+          path: dist/*
 
       - name: Commit and Push ZIPs to repo
         run: |
@@ -37,7 +37,7 @@ jobs:
 
           # Move ZIPs to a permanent folder in repo (e.g., releases)
           mkdir -p releases
-          cp dist/*.zip releases/
+          cp dist/* releases/
 
           git add releases/*.zip
           git commit -m "Add CLI bundles for commit $GITHUB_SHA" || echo "No changes to commit"
