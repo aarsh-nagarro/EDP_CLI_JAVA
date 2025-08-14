@@ -70,14 +70,14 @@ public class BuildDistributions {
                 Files.writeString(batFile,
                     "@echo off\r\n" +
                     "set DIR=%~dp0..\\\r\n" +
-                    "\"%DIR%runtime\\jre-21.0.3.jre\\bin\\java.exe\" -jar \"%DIR%lib\\edp-cli-1.0.jar\" %*\r\n"
+                    "\"%DIR%runtime\\jre-21.0.3\\bin\\java.exe\" -jar \"%DIR%lib\\edp-cli-1.0.jar\" %*\r\n"
                 );
             } else {
                 Path shFile = osDir.resolve("bin/edp-cli");
                 Files.writeString(shFile,
                     "#!/bin/sh\n" +
                     "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
-                    "$DIR/runtime/jre-21.0.3.jre/bin/java -jar $DIR/lib/edp-cli-1.0.jar \"$@\"\n"
+                    "$DIR/runtime/jre-21.0.3/bin/java -jar $DIR/lib/edp-cli-1.0.jar \"$@\"\n"
                 );
                 shFile.toFile().setExecutable(true);
             }
