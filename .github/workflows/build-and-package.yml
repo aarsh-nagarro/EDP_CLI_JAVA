@@ -27,7 +27,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: edp-cli-bundles
+          name: edp-cli-all
           path: dist/*
 
       - name: Commit and Push ZIPs to repo
