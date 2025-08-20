@@ -4,10 +4,14 @@ import java.io.*;
 import java.net.URL;
 import java.nio.file.*;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.zip.*;
 import java.util.zip.GZIPInputStream;
 
 public class BuildDistributions {
+
+    private static final Logger LOGGER = Logger.getLogger(BuildDistributions.class.getName());
 
     //private static final String VERSION = "21.0.8+9";
     // Correct Adoptium/TEMURIN release base (note %2B for '+')
@@ -32,7 +36,7 @@ public class BuildDistributions {
         for (String[] target : TARGETS) {
             String osName = target[0];
             String jreFile = target[1];
-          	String runtime = "runtime";
+            String runtime = "runtime";
 
             Path osDir = distDir.resolve("edp-cli-" + osName); // temp build folder
             Files.createDirectories(osDir.resolve("bin"));
@@ -47,22 +51,22 @@ public class BuildDistributions {
             Path jreArchive = distDir.resolve(jreFile);
 
             if (Files.exists(preDownloadedJre)) {
-                System.err.println("Using pre-downloaded JRE for " + osName + " from JRE folder...");
+                LOGGER.info("Using pre-downloaded JRE for " + osName + " from JRE folder...");
                 Files.copy(preDownloadedJre, jreArchive, StandardCopyOption.REPLACE_EXISTING);
             } else if (!Files.exists(jreArchive)) {
-                System.err.println("Downloading JRE for " + osName + "...");
+                LOGGER.info("Downloading JRE for " + osName + "...");
                 try (InputStream in = new URL(BASE_URL + jreFile).openStream();
                      OutputStream out = Files.newOutputStream(jreArchive,
                              StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
                     in.transferTo(out);
                 }
             } else {
-                System.err.println("JRE archive already present for " + osName + ", skipping download.");
+                LOGGER.info("JRE archive already present for " + osName + ", skipping download.");
             }
 
             // Extract JRE
             if (isDirectoryEmpty(osDir.resolve(runtime))) {
-                System.err.println("Extracting JRE for " + osName + "...");
+                LOGGER.info("Extracting JRE for " + osName + "...");
                 if (jreFile.endsWith(".zip")) {
                     unzip(jreArchive, osDir.resolve(runtime));
                 } else {
@@ -91,7 +95,7 @@ public class BuildDistributions {
             // Zip into edp-cli-all/
             Path osZip = allDir.resolve("edp-cli-" + osName + ".zip");
             zipFolder(osDir, osZip);
-            System.err.println("📦 Created: " + osZip.toAbsolutePath());
+            LOGGER.log(Level.INFO, "📦 Created: {0}", osZip.toAbsolutePath());
 
             // Clean up temp osDir
             deleteDirectoryRecursively(osDir);
@@ -100,17 +104,18 @@ public class BuildDistributions {
         // ✅ Also add shaded JAR into edp-cli-all
         Path allJar = allDir.resolve(jarName);
         Files.copy(jarFile, allJar, StandardCopyOption.REPLACE_EXISTING);
-        System.err.println("📦 Added shaded JAR to: " + allJar.toAbsolutePath());
+        LOGGER.log(Level.INFO, "📦 Added shaded JAR to: {0}", allJar.toAbsolutePath());
 
-        System.err.println("✅ All distributions zipped inside: " + allDir.toAbsolutePath());
+        LOGGER.log(Level.INFO, "✅ All distributions zipped inside: {0}", allDir.toAbsolutePath());
     }
 
     // 🔹 Find the shaded JAR dynamically
     private static Path findBuiltJar(Path targetDir) throws IOException {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(targetDir, "edp-cli-*.jar")) {
             for (Path jar : stream) {
-				if (Files.isRegularFile(jar)){
-                return jar;}
+                if (Files.isRegularFile(jar)){
+                    return jar;
+                }
             }
         }
         throw new FileNotFoundException("No JAR found in target/ matching edp-cli-*.jar");
