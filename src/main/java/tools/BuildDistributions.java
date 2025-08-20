@@ -47,22 +47,22 @@ public class BuildDistributions {
             Path jreArchive = distDir.resolve(jreFile);
 
             if (Files.exists(preDownloadedJre)) {
-                System.out.println("Using pre-downloaded JRE for " + osName + " from JRE folder...");
+                System.err.println("Using pre-downloaded JRE for " + osName + " from JRE folder...");
                 Files.copy(preDownloadedJre, jreArchive, StandardCopyOption.REPLACE_EXISTING);
             } else if (!Files.exists(jreArchive)) {
-                System.out.println("Downloading JRE for " + osName + "...");
+                System.err.println("Downloading JRE for " + osName + "...");
                 try (InputStream in = new URL(BASE_URL + jreFile).openStream();
                      OutputStream out = Files.newOutputStream(jreArchive,
                              StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
                     in.transferTo(out);
                 }
             } else {
-                System.out.println("JRE archive already present for " + osName + ", skipping download.");
+                System.err.println("JRE archive already present for " + osName + ", skipping download.");
             }
 
             // Extract JRE
             if (isDirectoryEmpty(osDir.resolve(runtime))) {
-                System.out.println("Extracting JRE for " + osName + "...");
+                System.err.println("Extracting JRE for " + osName + "...");
                 if (jreFile.endsWith(".zip")) {
                     unzip(jreArchive, osDir.resolve(runtime));
                 } else {
@@ -91,7 +91,7 @@ public class BuildDistributions {
             // Zip into edp-cli-all/
             Path osZip = allDir.resolve("edp-cli-" + osName + ".zip");
             zipFolder(osDir, osZip);
-            System.out.println("📦 Created: " + osZip.toAbsolutePath());
+            System.err.println("📦 Created: " + osZip.toAbsolutePath());
 
             // Clean up temp osDir
             deleteDirectoryRecursively(osDir);
@@ -100,9 +100,9 @@ public class BuildDistributions {
         // ✅ Also add shaded JAR into edp-cli-all
         Path allJar = allDir.resolve(jarName);
         Files.copy(jarFile, allJar, StandardCopyOption.REPLACE_EXISTING);
-        System.out.println("📦 Added shaded JAR to: " + allJar.toAbsolutePath());
+        System.err.println("📦 Added shaded JAR to: " + allJar.toAbsolutePath());
 
-        System.out.println("✅ All distributions zipped inside: " + allDir.toAbsolutePath());
+        System.err.println("✅ All distributions zipped inside: " + allDir.toAbsolutePath());
     }
 
     // 🔹 Find the shaded JAR dynamically
