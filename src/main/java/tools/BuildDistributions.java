@@ -5,7 +5,6 @@ import java.net.URL;
 import java.nio.file.*;
 import java.util.List;
 import java.util.zip.*;
-import java.util.zip.GZIPInputStream;
 
 public class BuildDistributions {
 
@@ -47,8 +46,10 @@ public class BuildDistributions {
                 Files.copy(preDownloadedJre, jreArchive, StandardCopyOption.REPLACE_EXISTING);
             } else if (!Files.exists(jreArchive)) {
                 System.out.println("Downloading JRE for " + osName + "...");
-                try (InputStream in = new URL(BASE_URL + jreFile).openStream()) {
-                    Files.copy(in, jreArchive, StandardCopyOption.REPLACE_EXISTING);
+                try (InputStream in = new URL(BASE_URL + jreFile).openStream();
+                     OutputStream out = Files.newOutputStream(jreArchive,
+                             StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                    in.transferTo(out);
                 }
             } else {
                 System.out.println("JRE archive already present for " + osName + ", skipping download.");
@@ -87,45 +88,45 @@ public class BuildDistributions {
             zipFolder(osDir, osZip);
             System.out.println("📦 Created: " + osZip.toAbsolutePath());
 
-            // Clean up temp osDir if you don't want unzipped builds lying around
+            // Clean up temp osDir
             deleteDirectoryRecursively(osDir);
         }
 
+        // ✅ Also add shaded JAR into edp-cli-all
         Path shadedJar = projectRoot.resolve("target/edp-cli-1.0.jar");
         Path allJar = allDir.resolve("edp-cli-1.0.jar");
         Files.copy(shadedJar, allJar, StandardCopyOption.REPLACE_EXISTING);
-
         System.out.println("📦 Added shaded JAR to: " + allJar.toAbsolutePath());
-        System.out.println("✅ All distributions zipped inside: " + allDir.toAbsolutePath());
 
         System.out.println("✅ All distributions zipped inside: " + allDir.toAbsolutePath());
     }
 
     private static void zipFolder(Path sourceFolder, Path zipFile) throws IOException {
-        try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zipFile))) {
-            Files.walk(sourceFolder)
-                .filter(path -> !Files.isDirectory(path))
-                .forEach(path -> {
-                    try {
-                        String relativePath = sourceFolder.getFileName() + "/" +
-                                sourceFolder.relativize(path).toString().replace("\\", "/");
-                        zos.putNextEntry(new ZipEntry(relativePath));
-                        Files.copy(path, zos);
-                        zos.closeEntry();
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
-                });
+        try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zipFile));
+             var paths = Files.walk(sourceFolder)) {
+            paths.filter(path -> !Files.isDirectory(path))
+                 .forEach(path -> {
+                     try (InputStream in = Files.newInputStream(path)) {
+                         String relativePath = sourceFolder.getFileName() + "/" +
+                                 sourceFolder.relativize(path).toString().replace("\\", "/");
+                         zos.putNextEntry(new ZipEntry(relativePath));
+                         in.transferTo(zos);
+                         zos.closeEntry();
+                     } catch (IOException e) {
+                         throw new UncheckedIOException(e);
+                     }
+                 });
         }
     }
 
     private static void deleteDirectoryRecursively(Path path) throws IOException {
         if (Files.exists(path)) {
-            Files.walk(path)
-                .sorted((a, b) -> b.compareTo(a)) // delete children first
-                .forEach(p -> {
-                    try { Files.delete(p); } catch (IOException ignored) {}
-                });
+            try (var walk = Files.walk(path)) {
+                walk.sorted((a, b) -> b.compareTo(a)) // delete children first
+                    .forEach(p -> {
+                        try { Files.delete(p); } catch (IOException ignored) {}
+                    });
+            }
         }
     }
 
@@ -144,7 +145,10 @@ public class BuildDistributions {
                     Files.createDirectories(newFile);
                 } else {
                     Files.createDirectories(newFile.getParent());
-                    Files.copy(zis, newFile, StandardCopyOption.REPLACE_EXISTING);
+                    try (OutputStream out = Files.newOutputStream(newFile,
+                            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                        zis.transferTo(out);
+                    }
                 }
             }
         }
@@ -162,7 +166,10 @@ public class BuildDistributions {
                     Files.createDirectories(newFile);
                 } else {
                     Files.createDirectories(newFile.getParent());
-                    Files.copy(tis, newFile, StandardCopyOption.REPLACE_EXISTING);
+                    try (OutputStream out = Files.newOutputStream(newFile,
+                            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                        tis.transferTo(out);
+                    }
                 }
             }
         }
@@ -188,10 +195,6 @@ public class BuildDistributions {
             long size = parseOctal(buf, 124, 12);
             boolean dir = buf[156] == '5';
             return new TarEntry(name, size, dir);
-        }
-
-        public int read(byte[] b, int off, int len) throws IOException {
-            return super.read(b, off, len);
         }
 
         private int readFully(byte[] b) throws IOException {
@@ -223,4 +226,3 @@ public class BuildDistributions {
         String getName() { return name; }
     }
 }
-
