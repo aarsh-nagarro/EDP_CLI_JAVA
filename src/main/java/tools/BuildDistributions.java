@@ -23,6 +23,10 @@ public class BuildDistributions {
         Path allDir = distDir.resolve("edp-cli-all");
         Files.createDirectories(allDir);
 
+        // 🔹 Find the built JAR dynamically (supports version bumped by pipeline)
+        Path jarFile = findBuiltJar(projectRoot.resolve("target"));
+        String jarName = jarFile.getFileName().toString();
+
         for (String[] target : TARGETS) {
             String osName = target[0];
             String jreFile = target[1];
@@ -33,9 +37,7 @@ public class BuildDistributions {
             Files.createDirectories(osDir.resolve("runtime"));
 
             // Copy CLI JAR
-            Files.copy(projectRoot.resolve("target/edp-cli-1.0.jar"),
-                       osDir.resolve("lib/edp-cli-1.0.jar"),
-                       StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(jarFile, osDir.resolve("lib").resolve(jarName), StandardCopyOption.REPLACE_EXISTING);
 
             // Locate or download JRE
             Path preDownloadedJre = projectRoot.resolve("JRE").resolve(jreFile);
@@ -71,14 +73,14 @@ public class BuildDistributions {
                 Files.writeString(batFile,
                     "@echo off\r\n" +
                     "set DIR=%~dp0..\\\r\n" +
-                    "\"%DIR%runtime\\jre-21.0.3\\bin\\java.exe\" -jar \"%DIR%lib\\edp-cli-1.0.jar\" %*\r\n"
+                    "\"%DIR%runtime\\jre-21.0.3\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
                 );
             } else {
                 Path shFile = osDir.resolve("bin/edp-cli");
                 Files.writeString(shFile,
                     "#!/bin/sh\n" +
                     "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
-                    "$DIR/runtime/jre-21.0.3/bin/java -jar $DIR/lib/edp-cli-1.0.jar \"$@\"\n"
+                    "$DIR/runtime/jre-21.0.3/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
                 );
                 shFile.toFile().setExecutable(true);
             }
@@ -93,12 +95,21 @@ public class BuildDistributions {
         }
 
         // ✅ Also add shaded JAR into edp-cli-all
-        Path shadedJar = projectRoot.resolve("target/edp-cli-1.0.jar");
-        Path allJar = allDir.resolve("edp-cli-1.0.jar");
-        Files.copy(shadedJar, allJar, StandardCopyOption.REPLACE_EXISTING);
+        Path allJar = allDir.resolve(jarName);
+        Files.copy(jarFile, allJar, StandardCopyOption.REPLACE_EXISTING);
         System.out.println("📦 Added shaded JAR to: " + allJar.toAbsolutePath());
 
         System.out.println("✅ All distributions zipped inside: " + allDir.toAbsolutePath());
+    }
+
+    // 🔹 Find the shaded JAR dynamically
+    private static Path findBuiltJar(Path targetDir) throws IOException {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(targetDir, "edp-cli-*.jar")) {
+            for (Path jar : stream) {
+                return jar;
+            }
+        }
+        throw new FileNotFoundException("No JAR found in target/ matching edp-cli-*.jar");
     }
 
     private static void zipFolder(Path sourceFolder, Path zipFile) throws IOException {
