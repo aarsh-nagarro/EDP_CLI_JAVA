@@ -45,7 +45,7 @@ public class BuildDistributions {
 
     // 🔹 Refactored method to reduce complexity in main()
     private static void processTarget(Path projectRoot, Path distDir, Path allDir,
-                                      Path jarFile, String jarName, String[] target) throws Exception {
+                                      Path jarFile, String jarName, String[] target) throws IOException {
         String osName = target[0];
         String jreFile = target[1];
         String runtime = "runtime";
@@ -102,19 +102,21 @@ public class BuildDistributions {
 
     private static void createLauncherScripts(String osName, Path osDir, String jarName) throws IOException {
         Properties config = new Properties();
-        config.setProperty("runtime.dir", "runtime"); // configurable runtime folder name
+		String runtimeDir = "runtime.dir";
+      	String runtime = "runtime";
+        config.setProperty(runtimeDir, runtime); // configurable runtime folder name
 
         if ("windows".equals(osName)) {
             Path batFile = osDir.resolve("bin/edp-cli.bat");
             Files.writeString(batFile, "@echo off\r\n" +
                     "set DIR=%~dp0..\\\r\n" +
-                    "\"%DIR%" + config.getProperty("runtime.dir") + "\\jdk-21.0.8+9-jre\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
+                    "\"%DIR%" + config.getProperty(runtimeDir) + "\\jdk-21.0.8+9-jre\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
             );
         } else {
             Path shFile = osDir.resolve("bin/edp-cli");
             Files.writeString(shFile, "#!/bin/sh\n" +
                     "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
-                    "$DIR/" + config.getProperty("runtime.dir") + "/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
+                    "$DIR/" + config.getProperty(runtimeDir) + "/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
             );
             if (!shFile.toFile().setExecutable(true)) {
                 LOGGER.log(Level.INFO, "Failed to set executable permission for {0}", shFile);
