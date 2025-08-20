@@ -34,15 +34,12 @@ public class BuildDistributions {
             String osName = target[0];
             String jreFile = target[1];
             String runtime = "runtime";
-
             Path osDir = distDir.resolve("edp-cli-" + osName); // temp build folder
             Files.createDirectories(osDir.resolve("bin"));
             Files.createDirectories(osDir.resolve("lib"));
             Files.createDirectories(osDir.resolve(runtime));
-
             // Copy CLI JAR
             Files.copy(jarFile, osDir.resolve("lib").resolve(jarName), StandardCopyOption.REPLACE_EXISTING);
-
             // Locate or download JRE
             Path preDownloadedJre = projectRoot.resolve("JRE").resolve(jreFile);
             Path jreArchive = distDir.resolve(jreFile);
@@ -61,7 +58,6 @@ public class BuildDistributions {
                 String jrePresent = "JRE archive already present for " + osName + ", skipping download.";
                 LOGGER.log(Level.INFO, jrePresent);
             }
-
             // Extract JRE
             if (isDirectoryEmpty(osDir.resolve(runtime))) {
                 String extractJRE = "Extracting JRE for " + osName + "...";
@@ -72,7 +68,6 @@ public class BuildDistributions {
                     untarGz(jreArchive, osDir.resolve(runtime));
                 }
             }
-
             // Launcher scripts
             if ("windows".equals(osName)) {
                 Path batFile = osDir.resolve("bin/edp-cli.bat");
@@ -87,10 +82,10 @@ public class BuildDistributions {
                         "$DIR/runtime/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
                 );
                 if (!shFile.toFile().setExecutable(true)) {
-                    LOGGER.warning("Failed to set executable permission for " + shFile);
+					String execPermission = "Failed to set executable permission for " + shFile;
+                    LOGGER.log(Level.INFO, execPermission);
                 }
             }
-
             // Zip into edp-cli-all/
             Path osZip = allDir.resolve("edp-cli-" + osName + ".zip");
             zipFolder(osDir, osZip);
