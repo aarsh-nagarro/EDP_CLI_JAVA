@@ -102,22 +102,24 @@ public class BuildDistributions {
 
     private static void createLauncherScripts(String osName, Path osDir, String jarName) throws IOException {
         Properties config = new Properties();
-		String runtimeDir = "runtime.dir";
-      	String runtime = "runtime";
+        String runtimeDir = "runtime.dir";
+        String runtime = "runtime";
         config.setProperty(runtimeDir, runtime); // configurable runtime folder name
 
         if ("windows".equals(osName)) {
             Path batFile = osDir.resolve("bin/edp-cli.bat");
-            Files.writeString(batFile, "@echo off\r\n" +
-                    "set DIR=%~dp0..\\\r\n" +
-                    "\"%DIR%" + config.getProperty(runtimeDir) + "\\jdk-21.0.8+9-jre\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
-            );
+            String content = "@echo off\r\n" +
+                    "set DIR=%~dp0.." + File.separator + "\r\n" +
+                    "\"%DIR%" + config.getProperty(runtimeDir) + File.separator + "jdk-21.0.8+9-jre" +
+                    File.separator + "bin" + File.separator + "java.exe\" -jar \"%DIR%lib" +
+                    File.separator + jarName + "\" %*\r\n";
+            Files.writeString(batFile, content);
         } else {
             Path shFile = osDir.resolve("bin/edp-cli");
-            Files.writeString(shFile, "#!/bin/sh\n" +
+            String content = "#!/bin/sh\n" +
                     "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
-                    "$DIR/" + config.getProperty(runtimeDir) + "/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
-            );
+                    "$DIR/" + config.getProperty(runtimeDir) + "/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n";
+            Files.writeString(shFile, content);
             if (!shFile.toFile().setExecutable(true)) {
                 LOGGER.log(Level.INFO, "Failed to set executable permission for {0}", shFile);
             }
@@ -252,6 +254,12 @@ public class BuildDistributions {
         private long parseOctal(byte[] buf, int offset, int length) {
             String s = new String(buf, offset, length).trim();
             return s.isEmpty() ? 0 : Long.parseLong(s, 8);
+        }
+
+        // ✅ Fix: override read(byte[], int, int) for transferTo()
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            return super.read(b, off, len);
         }
     }
 
