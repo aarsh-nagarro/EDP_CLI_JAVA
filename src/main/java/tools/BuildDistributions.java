@@ -13,7 +13,7 @@ public class BuildDistributions {
 
     private static final Logger LOGGER = Logger.getLogger(BuildDistributions.class.getName());
 
-    //private static final String VERSION = "21.0.8+9";
+   
     // Correct Adoptium/TEMURIN release base (note %2B for '+')
     private static final String BASE_URL = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/";
 
@@ -51,22 +51,26 @@ public class BuildDistributions {
             Path jreArchive = distDir.resolve(jreFile);
 
             if (Files.exists(preDownloadedJre)) {
-                LOGGER.info("Using pre-downloaded JRE for " + osName + " from JRE folder...");
+				String filesExist = "Using pre-downloaded JRE for " + osName + " from JRE folder...";
+                LOGGER.log(Level.INFO, filesExist);
                 Files.copy(preDownloadedJre, jreArchive, StandardCopyOption.REPLACE_EXISTING);
             } else if (!Files.exists(jreArchive)) {
-                LOGGER.info("Downloading JRE for " + osName + "...");
+              	String filesDownload = "Downloading JRE for " + osName + "...";
+                LOGGER.log(Level.INFO, filesDownload);
                 try (InputStream in = new URL(BASE_URL + jreFile).openStream();
                      OutputStream out = Files.newOutputStream(jreArchive,
                              StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
                     in.transferTo(out);
                 }
             } else {
-                LOGGER.info("JRE archive already present for " + osName + ", skipping download.");
+				String jrePresent = "JRE archive already present for " + osName + ", skipping download.";
+                LOGGER.log(Level.INFO, jrePresent);
             }
 
             // Extract JRE
             if (isDirectoryEmpty(osDir.resolve(runtime))) {
-                LOGGER.info("Extracting JRE for " + osName + "...");
+  				String extractJRE = "Extracting JRE for " + osName + "...";
+                LOGGER.log(Level.INFO, extractJRE);
                 if (jreFile.endsWith(".zip")) {
                     unzip(jreArchive, osDir.resolve(runtime));
                 } else {
@@ -127,8 +131,7 @@ public class BuildDistributions {
             paths.filter(path -> !Files.isDirectory(path))
                  .forEach(path -> {
                      try (InputStream in = Files.newInputStream(path)) {
-                         String relativePath = sourceFolder.getFileName() + "/" +
-                                 sourceFolder.relativize(path).toString().replace("\\", "/");
+                         String relativePath = sourceFolder.getFileName() + "/" + sourceFolder.relativize(path).toString().replace("\\", "/");
                          zos.putNextEntry(new ZipEntry(relativePath));
                          in.transferTo(zos);
                          zos.closeEntry();
@@ -144,7 +147,7 @@ public class BuildDistributions {
             try (var walk = Files.walk(path)) {
                 walk.sorted((a, b) -> b.compareTo(a)) // delete children first
                     .forEach(p -> {
-                        try { Files.delete(p); } catch (IOException ignored) {}
+                        try { Files.delete(p); } catch (IOException ignored) {throw new UncheckedIOException(ignored);}
                     });
             }
         }
@@ -218,7 +221,8 @@ public class BuildDistributions {
         }
 
         private int readFully(byte[] b) throws IOException {
-            int total = 0, read;
+            int total = 0;
+          	int read;
             while (total < b.length && (read = super.read(b, total, b.length - total)) != -1) {
                 total += read;
             }
