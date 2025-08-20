@@ -9,7 +9,7 @@ import java.util.zip.GZIPInputStream;
 
 public class BuildDistributions {
 
-    private static final String VERSION = "21.0.8+9";
+    //private static final String VERSION = "21.0.8+9";
     // Correct Adoptium/TEMURIN release base (note %2B for '+')
     private static final String BASE_URL = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/";
 
@@ -32,11 +32,12 @@ public class BuildDistributions {
         for (String[] target : TARGETS) {
             String osName = target[0];
             String jreFile = target[1];
+          	String runtime = "runtime";
 
             Path osDir = distDir.resolve("edp-cli-" + osName); // temp build folder
             Files.createDirectories(osDir.resolve("bin"));
             Files.createDirectories(osDir.resolve("lib"));
-            Files.createDirectories(osDir.resolve("runtime"));
+            Files.createDirectories(osDir.resolve(runtime));
 
             // Copy CLI JAR
             Files.copy(jarFile, osDir.resolve("lib").resolve(jarName), StandardCopyOption.REPLACE_EXISTING);
@@ -60,12 +61,12 @@ public class BuildDistributions {
             }
 
             // Extract JRE
-            if (isDirectoryEmpty(osDir.resolve("runtime"))) {
+            if (isDirectoryEmpty(osDir.resolve(runtime))) {
                 System.out.println("Extracting JRE for " + osName + "...");
                 if (jreFile.endsWith(".zip")) {
-                    unzip(jreArchive, osDir.resolve("runtime"));
+                    unzip(jreArchive, osDir.resolve(runtime));
                 } else {
-                    untarGz(jreArchive, osDir.resolve("runtime"));
+                    untarGz(jreArchive, osDir.resolve(runtime));
                 }
             }
 
@@ -75,14 +76,14 @@ public class BuildDistributions {
                 Files.writeString(batFile,
                     "@echo off\r\n" +
                     "set DIR=%~dp0..\\\r\n" +
-                    "\"%DIR%runtime\\jre-21.0.3\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
+                    "\"%DIR%runtime\\jdk-21.0.8+9-jre\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
                 );
             } else {
                 Path shFile = osDir.resolve("bin/edp-cli");
                 Files.writeString(shFile,
                     "#!/bin/sh\n" +
                     "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
-                    "$DIR/runtime/jre-21.0.3/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
+                    "$DIR/runtime/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
                 );
                 shFile.toFile().setExecutable(true);
             }
@@ -108,7 +109,8 @@ public class BuildDistributions {
     private static Path findBuiltJar(Path targetDir) throws IOException {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(targetDir, "edp-cli-*.jar")) {
             for (Path jar : stream) {
-                return jar;
+				if (Files.isRegularFile(jar)){
+                return jar;}
             }
         }
         throw new FileNotFoundException("No JAR found in target/ matching edp-cli-*.jar");
