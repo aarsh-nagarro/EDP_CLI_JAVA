@@ -5,16 +5,18 @@ import java.net.URL;
 import java.nio.file.*;
 import java.util.List;
 import java.util.zip.*;
+import java.util.zip.GZIPInputStream;
 
 public class BuildDistributions {
 
-    private static final String VERSION = "21.0.3+12";
-    private static final String BASE_URL = "https://download.bell-sw.com/java/" + VERSION + "/";
+    private static final String VERSION = "21.0.8+9";
+    // Correct Adoptium/TEMURIN release base (note %2B for '+')
+    private static final String BASE_URL = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/";
 
     private static final List<String[]> TARGETS = List.of(
-        new String[]{"windows", "bellsoft-jre" + VERSION + "-windows-amd64.zip"},
-        new String[]{"linux", "bellsoft-jre" + VERSION + "-linux-amd64.tar.gz"},
-        new String[]{"macos", "bellsoft-jre" + VERSION + "-macos-amd64.tar.gz"}
+        new String[]{"windows", "OpenJDK21U-jre_x64_windows_hotspot_21.0.8_9.zip"},
+        new String[]{"linux",   "OpenJDK21U-jre_x64_linux_hotspot_21.0.8_9.tar.gz"},
+        new String[]{"macos",   "OpenJDK21U-jre_x64_mac_hotspot_21.0.8_9.tar.gz"}
     );
 
     public static void main(String[] args) throws Exception {
