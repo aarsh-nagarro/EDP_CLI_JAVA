@@ -10,17 +10,14 @@ import java.util.zip.*;
 import java.util.zip.GZIPInputStream;
 
 public class BuildDistributions {
-
     private static final Logger LOGGER = Logger.getLogger(BuildDistributions.class.getName());
 
-   
     // Correct Adoptium/TEMURIN release base (note %2B for '+')
     private static final String BASE_URL = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/";
-
     private static final List<String[]> TARGETS = List.of(
-        new String[]{"windows", "OpenJDK21U-jre_x64_windows_hotspot_21.0.8_9.zip"},
-        new String[]{"linux",   "OpenJDK21U-jre_x64_linux_hotspot_21.0.8_9.tar.gz"},
-        new String[]{"macos",   "OpenJDK21U-jre_x64_mac_hotspot_21.0.8_9.tar.gz"}
+            new String[]{"windows", "OpenJDK21U-jre_x64_windows_hotspot_21.0.8_9.zip"},
+            new String[]{"linux", "OpenJDK21U-jre_x64_linux_hotspot_21.0.8_9.tar.gz"},
+            new String[]{"macos", "OpenJDK21U-jre_x64_mac_hotspot_21.0.8_9.tar.gz"}
     );
 
     public static void main(String[] args) throws Exception {
@@ -49,27 +46,25 @@ public class BuildDistributions {
             // Locate or download JRE
             Path preDownloadedJre = projectRoot.resolve("JRE").resolve(jreFile);
             Path jreArchive = distDir.resolve(jreFile);
-
             if (Files.exists(preDownloadedJre)) {
-				String filesExist = "Using pre-downloaded JRE for " + osName + " from JRE folder...";
+                String filesExist = "Using pre-downloaded JRE for " + osName + " from JRE folder...";
                 LOGGER.log(Level.INFO, filesExist);
                 Files.copy(preDownloadedJre, jreArchive, StandardCopyOption.REPLACE_EXISTING);
             } else if (!Files.exists(jreArchive)) {
-              	String filesDownload = "Downloading JRE for " + osName + "...";
+                String filesDownload = "Downloading JRE for " + osName + "...";
                 LOGGER.log(Level.INFO, filesDownload);
                 try (InputStream in = new URL(BASE_URL + jreFile).openStream();
-                     OutputStream out = Files.newOutputStream(jreArchive,
-                             StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                     OutputStream out = Files.newOutputStream(jreArchive, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
                     in.transferTo(out);
                 }
             } else {
-				String jrePresent = "JRE archive already present for " + osName + ", skipping download.";
+                String jrePresent = "JRE archive already present for " + osName + ", skipping download.";
                 LOGGER.log(Level.INFO, jrePresent);
             }
 
             // Extract JRE
             if (isDirectoryEmpty(osDir.resolve(runtime))) {
-  				String extractJRE = "Extracting JRE for " + osName + "...";
+                String extractJRE = "Extracting JRE for " + osName + "...";
                 LOGGER.log(Level.INFO, extractJRE);
                 if (jreFile.endsWith(".zip")) {
                     unzip(jreArchive, osDir.resolve(runtime));
@@ -81,19 +76,19 @@ public class BuildDistributions {
             // Launcher scripts
             if ("windows".equals(osName)) {
                 Path batFile = osDir.resolve("bin/edp-cli.bat");
-                Files.writeString(batFile,
-                    "@echo off\r\n" +
-                    "set DIR=%~dp0..\\\r\n" +
-                    "\"%DIR%runtime\\jdk-21.0.8+9-jre\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
+                Files.writeString(batFile, "@echo off\r\n" +
+                        "set DIR=%~dp0..\\\r\n" +
+                        "\"%DIR%runtime\\jdk-21.0.8+9-jre\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
                 );
             } else {
                 Path shFile = osDir.resolve("bin/edp-cli");
-                Files.writeString(shFile,
-                    "#!/bin/sh\n" +
-                    "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
-                    "$DIR/runtime/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
+                Files.writeString(shFile, "#!/bin/sh\n" +
+                        "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
+                        "$DIR/runtime/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
                 );
-                shFile.toFile().setExecutable(true);
+                if (!shFile.toFile().setExecutable(true)) {
+                    LOGGER.warning("Failed to set executable permission for " + shFile);
+                }
             }
 
             // Zip into edp-cli-all/
@@ -117,7 +112,7 @@ public class BuildDistributions {
     private static Path findBuiltJar(Path targetDir) throws IOException {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(targetDir, "edp-cli-*.jar")) {
             for (Path jar : stream) {
-                if (Files.isRegularFile(jar)){
+                if (Files.isRegularFile(jar)) {
                     return jar;
                 }
             }
@@ -129,16 +124,17 @@ public class BuildDistributions {
         try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zipFile));
              var paths = Files.walk(sourceFolder)) {
             paths.filter(path -> !Files.isDirectory(path))
-                 .forEach(path -> {
-                     try (InputStream in = Files.newInputStream(path)) {
-                         String relativePath = sourceFolder.getFileName() + "/" + sourceFolder.relativize(path).toString().replace("\\", "/");
-                         zos.putNextEntry(new ZipEntry(relativePath));
-                         in.transferTo(zos);
-                         zos.closeEntry();
-                     } catch (IOException e) {
-                         throw new UncheckedIOException(e);
-                     }
-                 });
+                    .forEach(path -> {
+                        try (InputStream in = Files.newInputStream(path)) {
+                            String relativePath = sourceFolder.getFileName() + "/" +
+                                    sourceFolder.relativize(path).toString().replace(File.separator, "/");
+                            zos.putNextEntry(new ZipEntry(relativePath));
+                            in.transferTo(zos);
+                            zos.closeEntry();
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    });
         }
     }
 
@@ -146,9 +142,13 @@ public class BuildDistributions {
         if (Files.exists(path)) {
             try (var walk = Files.walk(path)) {
                 walk.sorted((a, b) -> b.compareTo(a)) // delete children first
-                    .forEach(p -> {
-                        try { Files.delete(p); } catch (IOException ignored) {throw new UncheckedIOException(ignored);}
-                    });
+                        .forEach(p -> {
+                            try {
+                                Files.delete(p);
+                            } catch (IOException ignored) {
+                                throw new UncheckedIOException(ignored);
+                            }
+                        });
             }
         }
     }
@@ -222,7 +222,7 @@ public class BuildDistributions {
 
         private int readFully(byte[] b) throws IOException {
             int total = 0;
-          	int read;
+            int read;
             while (total < b.length && (read = super.read(b, total, b.length - total)) != -1) {
                 total += read;
             }
@@ -236,6 +236,11 @@ public class BuildDistributions {
         private long parseOctal(byte[] buf, int offset, int length) {
             String s = new String(buf, offset, length).trim();
             return s.isEmpty() ? 0 : Long.parseLong(s, 8);
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            return super.read(b, off, len);
         }
     }
 
