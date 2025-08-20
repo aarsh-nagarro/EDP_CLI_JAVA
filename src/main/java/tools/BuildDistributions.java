@@ -4,6 +4,7 @@ import java.io.*;
 import java.net.URL;
 import java.nio.file.*;
 import java.util.List;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.*;
@@ -31,68 +32,7 @@ public class BuildDistributions {
         String jarName = jarFile.getFileName().toString();
 
         for (String[] target : TARGETS) {
-            String osName = target[0];
-            String jreFile = target[1];
-            String runtime = "runtime";
-            Path osDir = distDir.resolve("edp-cli-" + osName); // temp build folder
-            Files.createDirectories(osDir.resolve("bin"));
-            Files.createDirectories(osDir.resolve("lib"));
-            Files.createDirectories(osDir.resolve(runtime));
-            // Copy CLI JAR
-            Files.copy(jarFile, osDir.resolve("lib").resolve(jarName), StandardCopyOption.REPLACE_EXISTING);
-            // Locate or download JRE
-            Path preDownloadedJre = projectRoot.resolve("JRE").resolve(jreFile);
-            Path jreArchive = distDir.resolve(jreFile);
-            if (Files.exists(preDownloadedJre)) {
-                String filesExist = "Using pre-downloaded JRE for " + osName + " from JRE folder...";
-                LOGGER.log(Level.INFO, filesExist);
-                Files.copy(preDownloadedJre, jreArchive, StandardCopyOption.REPLACE_EXISTING);
-            } else if (!Files.exists(jreArchive)) {
-                String filesDownload = "Downloading JRE for " + osName + "...";
-                LOGGER.log(Level.INFO, filesDownload);
-                try (InputStream in = new URL(BASE_URL + jreFile).openStream();
-                     OutputStream out = Files.newOutputStream(jreArchive, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                    in.transferTo(out);
-                }
-            } else {
-                String jrePresent = "JRE archive already present for " + osName + ", skipping download.";
-                LOGGER.log(Level.INFO, jrePresent);
-            }
-            // Extract JRE
-            if (isDirectoryEmpty(osDir.resolve(runtime))) {
-                String extractJRE = "Extracting JRE for " + osName + "...";
-                LOGGER.log(Level.INFO, extractJRE);
-                if (jreFile.endsWith(".zip")) {
-                    unzip(jreArchive, osDir.resolve(runtime));
-                } else {
-                    untarGz(jreArchive, osDir.resolve(runtime));
-                }
-            }
-            // Launcher scripts
-            if ("windows".equals(osName)) {
-                Path batFile = osDir.resolve("bin/edp-cli.bat");
-                Files.writeString(batFile, "@echo off\r\n" +
-                        "set DIR=%~dp0..\\\r\n" +
-                        "\"%DIR%runtime\\jdk-21.0.8+9-jre\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
-                );
-            } else {
-                Path shFile = osDir.resolve("bin/edp-cli");
-                Files.writeString(shFile, "#!/bin/sh\n" +
-                        "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
-                        "$DIR/runtime/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
-                );
-                if (!shFile.toFile().setExecutable(true)) {
-					String execPermission = "Failed to set executable permission for " + shFile;
-                    LOGGER.log(Level.INFO, execPermission);
-                }
-            }
-            // Zip into edp-cli-all/
-            Path osZip = allDir.resolve("edp-cli-" + osName + ".zip");
-            zipFolder(osDir, osZip);
-            LOGGER.log(Level.INFO, "📦 Created: {0}", osZip.toAbsolutePath());
-
-            // Clean up temp osDir
-            deleteDirectoryRecursively(osDir);
+            processTarget(projectRoot, distDir, allDir, jarFile, jarName, target);
         }
 
         // ✅ Also add shaded JAR into edp-cli-all
@@ -101,6 +41,85 @@ public class BuildDistributions {
         LOGGER.log(Level.INFO, "📦 Added shaded JAR to: {0}", allJar.toAbsolutePath());
 
         LOGGER.log(Level.INFO, "✅ All distributions zipped inside: {0}", allDir.toAbsolutePath());
+    }
+
+    // 🔹 Refactored method to reduce complexity in main()
+    private static void processTarget(Path projectRoot, Path distDir, Path allDir,
+                                      Path jarFile, String jarName, String[] target) throws Exception {
+        String osName = target[0];
+        String jreFile = target[1];
+        String runtime = "runtime";
+        Path osDir = distDir.resolve("edp-cli-" + osName); // temp build folder
+        Files.createDirectories(osDir.resolve("bin"));
+        Files.createDirectories(osDir.resolve("lib"));
+        Files.createDirectories(osDir.resolve(runtime));
+
+        // Copy CLI JAR
+        Files.copy(jarFile, osDir.resolve("lib").resolve(jarName), StandardCopyOption.REPLACE_EXISTING);
+
+        // Locate or download JRE
+        Path preDownloadedJre = projectRoot.resolve("JRE").resolve(jreFile);
+        Path jreArchive = distDir.resolve(jreFile);
+        handleJreDownload(preDownloadedJre, jreArchive, osName, jreFile);
+
+        // Extract JRE
+        if (isDirectoryEmpty(osDir.resolve(runtime))) {
+            String extractJRE = "Extracting JRE for " + osName + "...";
+            LOGGER.log(Level.INFO, extractJRE);
+            if (jreFile.endsWith(".zip")) {
+                unzip(jreArchive, osDir.resolve(runtime));
+            } else {
+                untarGz(jreArchive, osDir.resolve(runtime));
+            }
+        }
+
+        // Launcher scripts
+        createLauncherScripts(osName, osDir, jarName);
+
+        // Zip into edp-cli-all/
+        Path osZip = allDir.resolve("edp-cli-" + osName + ".zip");
+        zipFolder(osDir, osZip);
+        LOGGER.log(Level.INFO, "📦 Created: {0}", osZip.toAbsolutePath());
+
+        // Clean up temp osDir
+        deleteDirectoryRecursively(osDir);
+    }
+
+    private static void handleJreDownload(Path preDownloadedJre, Path jreArchive, String osName, String jreFile) throws IOException {
+        if (Files.exists(preDownloadedJre)) {
+            LOGGER.log(Level.INFO, "Using pre-downloaded JRE for {0} from JRE folder...", osName);
+            Files.copy(preDownloadedJre, jreArchive, StandardCopyOption.REPLACE_EXISTING);
+        } else if (!Files.exists(jreArchive)) {
+            LOGGER.log(Level.INFO, "Downloading JRE for {0}...", osName);
+            try (InputStream in = new URL(BASE_URL + jreFile).openStream();
+                 OutputStream out = Files.newOutputStream(jreArchive, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                in.transferTo(out);
+            }
+        } else {
+            LOGGER.log(Level.INFO, "JRE archive already present for {0}, skipping download.", osName);
+        }
+    }
+
+    private static void createLauncherScripts(String osName, Path osDir, String jarName) throws IOException {
+        Properties config = new Properties();
+        config.setProperty("runtime.dir", "runtime"); // configurable runtime folder name
+
+        if ("windows".equals(osName)) {
+            Path batFile = osDir.resolve("bin/edp-cli.bat");
+            Files.writeString(batFile, "@echo off\r\n" +
+                    "set DIR=%~dp0..\\\r\n" +
+                    "\"%DIR%" + config.getProperty("runtime.dir") + "\\jdk-21.0.8+9-jre\\bin\\java.exe\" -jar \"%DIR%lib\\" + jarName + "\" %*\r\n"
+            );
+        } else {
+            Path shFile = osDir.resolve("bin/edp-cli");
+            Files.writeString(shFile, "#!/bin/sh\n" +
+                    "DIR=$(cd $(dirname $0)/.. && pwd)\n" +
+                    "$DIR/" + config.getProperty("runtime.dir") + "/jdk-21.0.8+9-jre/bin/java -jar $DIR/lib/" + jarName + " \"$@\"\n"
+            );
+            if (!shFile.toFile().setExecutable(true)) {
+                LOGGER.log(Level.INFO, "Failed to set executable permission for {0}", shFile);
+            }
+        }
     }
 
     // 🔹 Find the shaded JAR dynamically
@@ -231,11 +250,6 @@ public class BuildDistributions {
         private long parseOctal(byte[] buf, int offset, int length) {
             String s = new String(buf, offset, length).trim();
             return s.isEmpty() ? 0 : Long.parseLong(s, 8);
-        }
-
-        @Override
-        public int read(byte[] b, int off, int len) throws IOException {
-            return super.read(b, off, len);
         }
     }
 
