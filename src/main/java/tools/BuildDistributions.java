@@ -91,6 +91,13 @@ public class BuildDistributions {
             deleteDirectoryRecursively(osDir);
         }
 
+        Path shadedJar = projectRoot.resolve("target/edp-cli-1.0.jar");
+        Path allJar = allDir.resolve("edp-cli-1.0.jar");
+        Files.copy(shadedJar, allJar, StandardCopyOption.REPLACE_EXISTING);
+
+        System.out.println("📦 Added shaded JAR to: " + allJar.toAbsolutePath());
+        System.out.println("✅ All distributions zipped inside: " + allDir.toAbsolutePath());
+
         System.out.println("✅ All distributions zipped inside: " + allDir.toAbsolutePath());
     }
 
@@ -216,3 +223,4 @@ public class BuildDistributions {
         String getName() { return name; }
     }
 }
+
